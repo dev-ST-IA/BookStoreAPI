@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using BulkyBookBackEnd.Data;
+using BulkyBookBackEnd.Models;
+using System.ComponentModel.DataAnnotations;
 
 namespace BulkyBookBackEnd.Req.Bodies
 {
@@ -28,6 +30,16 @@ namespace BulkyBookBackEnd.Req.Bodies
 
         [Required]
         public string LastName { get; set; } = default!;
+
+        public bool checkIfExist(BookDbContext db)
+        {
+            var existingUser = db.Users.Any(u=>
+            (u.UserName == UserName) ||
+            (u.EmailAddress == EmailAddress && Role==u.Role) ||
+            (u.PhoneNumber==PhoneNumber&& Role==u.Role)
+            );
+            return existingUser;
+        }
 
     }
 }

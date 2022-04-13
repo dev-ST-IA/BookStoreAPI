@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using System.Security.Claims;
 using BulkyBookBackEnd.Req.Bodies;
+using BulkyBookBackEnd.Res.Bodies;
 
 namespace BulkyBookBackEnd.Controllers
 {
@@ -29,18 +30,25 @@ namespace BulkyBookBackEnd.Controllers
         // GET: api/Books
         [HttpGet("getAll")]
         [Produces("application/json")]
-        public async Task<ActionResult<IEnumerable<Book>>> GetBooks([FromQuery] Paging paging,[FromQuery] string search)
+        [AllowAnonymous]
+        public async Task<ActionResult<IEnumerable<Book>>> GetBooks([FromQuery] Paging paging,[FromQuery] string search="",[FromQuery] int category=-1)
         {
             try
             {
+                var user = Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity,_context);
                 var books = from b in _context.Books
-                            select b;
+                        select b;
+
                 if (!String.IsNullOrEmpty(search))
                 {
                     books = books.Where(b => b.Title.Contains(search) ||
                                             b.Category.Name.Contains(search) ||
                                             b.Description.Contains(search) ||
                                             b.Price.ToString().Contains(search));
+                }
+                if(category != -1)
+                {
+                    books = books.Where(b=>b.Category.Id==category);
                 }
                 switch (paging.Sort)
                 {
@@ -67,7 +75,37 @@ namespace BulkyBookBackEnd.Controllers
                         break;
                 }
                 var data = await PaginatedList<Book>.CreateAsync(books.AsNoTracking(),paging);
-                return Ok(data);
+                if (user.Result == null)
+                {
+                    var filtered = data.Select(b => new
+                    {
+                        Id = b.Id,
+                        Title = b.Title,
+                        Price = b.Price,
+                        CreatedDate = b.CreatedDate,   
+                        Category = b.Category,
+                        Description = b.Description,
+                        Units = b.Units,
+                        FeedBacks = b.FeedBacks,
+                        ImageUrl = b.ImageUrl,
+                        Publisher = b.Publisher,
+                        Rating = b.Rating,
+                        UpdatedDate = b.UpdatedDate,
+                    });
+                    return Ok(new
+                    {
+                        Books = filtered,
+                        TotalPages = data.TotalPages,
+                    });
+                }
+                var response = new GetBooks
+                {
+                    Books = data,
+                    TotalPages = data.TotalPages,
+                };
+                return Ok(response);
+
+
             }
             catch (Exception e)
             {
@@ -77,15 +115,35 @@ namespace BulkyBookBackEnd.Controllers
 
         // GET: api/Books/5
         [HttpGet("get/{id}")]
+        [AllowAnonymous]
         public async Task<ActionResult<Book>> GetBook(int id)
         {
+            var user = Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
             var book = await _context.Books.FindAsync(id);
 
             if (book == null)
             {
                 return NotFound();
             }
-
+            if (user.Result == null)
+            {
+                var filtered = new
+                {
+                    Id = book.Id,
+                    Title = book.Title,
+                    Price = book.Price,
+                    CreatedDate = book.CreatedDate,
+                    Category = book.Category,
+                    Description = book.Description,
+                    Units = book.Units,
+                    FeedBacks = book.FeedBacks,
+                    ImageUrl = book.ImageUrl,
+                    Publisher = book.Publisher,
+                    Rating = book.Rating,
+                    UpdatedDate = book.UpdatedDate,
+                };
+                return Ok(filtered);
+            }
             return book;
         }
 

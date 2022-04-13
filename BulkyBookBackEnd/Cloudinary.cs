@@ -13,11 +13,12 @@ namespace BulkyBookBackEnd
 
         public CloudinaryClass()
         {
-            Account account = new Account(
-                    CloudName,
-                    ApiSecret,
-                    ApiKey
-                );
+            Account account = new Account
+            {
+                Cloud = CloudName,
+                 ApiSecret=ApiSecret,
+                ApiKey=ApiKey
+            };
             this.CloudinaryAdapter = new Cloudinary(account);
             this.CloudinaryAdapter.Api.Secure = true;
 

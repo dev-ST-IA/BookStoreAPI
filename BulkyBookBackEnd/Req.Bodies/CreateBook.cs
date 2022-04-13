@@ -74,20 +74,26 @@ namespace BulkyBookBackEnd.Req.Bodies
                 if (body.Image != null)
                 {
                     var file = body.Image;
-                    var fileName = $"book-{newBook.Id}";
-                    var filePath = Path.GetTempFileName();
-                    using (var stream = File.Create(filePath))
+                    var fileName = file.FileName.Trim('"');
+                    var fileExt = Path.GetExtension(fileName);  
+                    var newFileName = $"book-{newBook.Id}";
+                    var newFileNameExt = newFileName+fileExt;
+                    var filePath = Path.GetTempPath();
+                    var abosolutePath = Path.Combine(filePath, newFileNameExt);
+                    using (var stream = File.Create(abosolutePath))
                     {
+                        stream.Flush();
                         await file.CopyToAsync(stream);
+                        stream.Position = 0;
+                        stream.Close();
                         var cloudinary = new CloudinaryClass();
-                        var filePathFromServer = $"{filePath}/{fileName}";
                         var imageUrl = await cloudinary.BookImageUpload(
-                                            filePathFromServer,
-                                            fileName
+                                            abosolutePath,
+                                            newFileName
                                         );
-                        book.ImageUrl = imageUrl;
-                        book.ImageName = fileName;
-                        File.Delete(filePathFromServer);
+                        newBook.ImageUrl = imageUrl;
+                        newBook.ImageName = newFileName;
+                        File.Delete(abosolutePath);
                     }
                 }
                 db.Entry(newBook).State = EntityState.Modified;

@@ -5,14 +5,21 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options=>options.JsonSerializerOptions.ReferenceHandler=ReferenceHandler.Preserve);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
+
+builder.Services.AddCors(p => p.AddPolicy("corsapp", corsBuilder =>
+{
+    corsBuilder.WithOrigins(builder.Configuration["CorsAllowedHosts:FrontEndDevelopmentHost"], builder.Configuration["CorsAllowedHosts:FrontEndProductionHost"]).AllowAnyMethod().AllowAnyHeader();
+}));
+
 builder.Services.AddSwaggerGen(options=>
     {
         options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -62,7 +69,7 @@ Jwt.Audience = builder.Configuration["Jwt:Audience"];
 Jwt.Key = builder.Configuration["Jwt:Key"];
 CloudinaryClass.CloudName = builder.Configuration["Cloudinary:CloudName"];
 CloudinaryClass.ApiKey = builder.Configuration["Cloudinary:ApiKey"];
-CloudinaryClass.ApiSecret = builder.Configuration["Cloudinary:CloudName"];
+CloudinaryClass.ApiSecret = builder.Configuration["Cloudinary:ApiSecret"];
 
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
@@ -75,6 +82,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors("corsapp");
 app.UseHttpsRedirection();
 
 app.UseAuthorization();
