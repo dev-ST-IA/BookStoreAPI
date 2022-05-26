@@ -15,5 +15,7 @@ namespace BulkyBookBackEnd.Models
 
         [Required]
         public string Text { get; set; }
+
+        public DateTime CreatedDate { get; set; } = DateTime.Now;
     }
 }

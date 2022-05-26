@@ -13,6 +13,8 @@ namespace BulkyBookBackEnd.Req.Bodies
 
         public string? CategoryName { get; set; } = default!;
 
+        public string? AuthorName { get; set; } = default!;
+
         public string? Title { get; set; } = default!;
 
         public string? Description { get; set; } = default!;
@@ -26,9 +28,6 @@ namespace BulkyBookBackEnd.Req.Bodies
 
         public IFormFile? Image { get; set; } = null;
 
-        public string ImageName { get; set; } = string.Empty;
-
-        public string? ImageUrl { get; set; } = string.Empty;
         public string? Publisher { get; set; } = string.Empty;
 
         public bool isBook;
@@ -37,6 +36,11 @@ namespace BulkyBookBackEnd.Req.Bodies
         {
             this.Id = bookId;
             isBook = BookExists(bookId);
+        }
+
+        public EditBook()
+        {
+
         }
 
         public async static Task<Book> EditAsync(BookDbContext db,EditBook editables)
@@ -48,42 +52,89 @@ namespace BulkyBookBackEnd.Req.Bodies
                 {
                     return null;
                 }
-                book.Cost = (float)editables.Cost;
-                book.Price = (float)editables.Price;
-                book.Title = editables.Title;
-                book.Description = editables.Description;
-                book.Units = (int)editables.Units;
-                book.Publisher = editables.Publisher;
-                var category = await db.Categories.FindAsync(editables.CategoryName);
-                if (category == null)
+                if (editables.Cost != null)
                 {
-                    return null;
+                    book.Cost = (float)editables.Cost;
                 }
-                book.Category = category;
-                if(string.IsNullOrEmpty(editables.ImageUrl))
+                if(editables.Price != null)
                 {
-                    book.ImageName = editables.ImageName;
+                    book.Price = (float)editables.Price;
+                }
+                if(editables.Title != null)
+                {
+                    book.Title = editables.Title;
+                }
+                if (editables.Description != null)
+                {
+                    book.Description = editables.Description;
+                }
+                if (editables.Units != null)
+                {
+                    book.Units = (int)editables.Units;
+                }
+                if (editables.Publisher != null)
+                {
+                    book.Publisher = editables.Publisher;
+                }
+                var category = await db.Categories.Where(i=>i.Name==editables.CategoryName).FirstOrDefaultAsync();
+                if (category == null&&editables.CategoryName!=null)
+                {
+                    category = new Category
+                    {
+                        Name = editables.CategoryName
+                    };
+                    await db.Categories.AddAsync(category);
+                    category.Books.Add(book);
+                    db.Entry(category).State = EntityState.Modified;
+                }
+                var author = await db.Author.Where(t=>t.Name==editables.AuthorName).FirstOrDefaultAsync();
+                if (author == null&&editables.AuthorName!=null)
+                {
+                    author = new Author
+                    {
+                        Name = editables.AuthorName
+                    };
+                    await db.Author.AddAsync(author);
+                    author.Books.Add(book);
+                    db.Entry(category).State = EntityState.Modified;
+                }
+                if(editables.CategoryName != null)
+                {
+                    book.Category = category;
+                }
+                if(editables.AuthorName != null)
+                {
+                    book.Author = author;
+                }
+                if(editables.Image!= null)
+                {
                     if (editables.Image.Length > 0)
                     {
                         var file = editables.Image;
-                        var fileName = $"book-{book.Id}";
-                        var filePath = Path.GetTempFileName();
-                        using(var stream = File.Create(filePath))
+                        var fileName = file.FileName.Trim('"');
+                        var fileExt = Path.GetExtension(fileName);
+                        var newFileName = book.ImageName;
+                        var newFileNameExt = newFileName + fileExt;
+                        var filePath = Path.GetTempPath();
+                        var abosolutePath = Path.Combine(filePath, newFileNameExt);
+                        using (var stream = File.Create(abosolutePath))
                         {
-                            await file.CopyToAsync(stream); 
+                            stream.Flush();
+                            await file.CopyToAsync(stream);
+                            stream.Position = 0;
+                            stream.Close();
                             var cloudinary = new CloudinaryClass();
-                            var filePathFromServer = $"{filePath}/{fileName}";
                             var imageUrl = await cloudinary.BookImageUpload(
-                                                filePathFromServer,
-                                                fileName
+                                                abosolutePath,
+                                                newFileName
                                             );
                             book.ImageUrl = imageUrl;
-                            book.ImageName = fileName;
-                            File.Delete(filePathFromServer);
+                            File.Delete(abosolutePath);
                         }
                     }
                 }
                 db.Entry(book).State = EntityState.Modified;
+                
                 await db.SaveChangesAsync();
                 return book;
             }

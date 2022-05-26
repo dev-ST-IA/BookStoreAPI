@@ -10,6 +10,6 @@ namespace BulkyBookBackEnd.Models
         [Required]
         public string Name { get; set; } = default!;
 
-        public ICollection<Book> Books { get; set; }
+        public  ICollection<Book> Books { get; set; }
     }
 }

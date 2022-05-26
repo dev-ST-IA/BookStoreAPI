@@ -10,6 +10,8 @@ namespace BulkyBookBackEnd.Models
 
         [Required]
         public User User { get; set; }
+
+        [ForeignKey("CartId")]
         public ICollection<CartProduct>? Products { get; set; }
         public bool IsOpen { get; set; } = true;
     }

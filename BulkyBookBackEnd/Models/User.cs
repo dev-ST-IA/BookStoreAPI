@@ -55,7 +55,9 @@ namespace BulkyBookBackEnd.Models
 
         public ICollection<Book>? WatchList { get; set; } = default!;
 
-        public IDictionary<Book, FeedBack>? Feedbacks { get; set; } = new Dictionary<Book, FeedBack>();
+        public ICollection<FeedBack>? Feedbacks { get; set; } = default!;
+
+        public ICollection<BookRating>? BookRatings { get; set; } = default!;
 
         public DateTime CreatedDateTime { get; set; } = DateTime.Now;
 

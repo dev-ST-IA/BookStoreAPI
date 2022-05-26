@@ -11,6 +11,7 @@ using BulkyBookBackEnd.Models;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Net;
 
 namespace BulkyBookBackEnd.Controllers
 {
@@ -29,7 +30,7 @@ namespace BulkyBookBackEnd.Controllers
         [HttpGet("getAll")]
         [Produces("application/json")]
         //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator,Customer")]
-        public async Task<ActionResult<IEnumerable<Order>>> GetOrdersByAdmin([FromQuery] Paging paging, [FromQuery] string search)
+        public async Task<ActionResult<IEnumerable<Order>>> GetOrdersByAdmin([FromQuery] Paging paging, [FromQuery] string search,[FromQuery] DateRange dateRange)
         {
             try
             {
@@ -44,11 +45,18 @@ namespace BulkyBookBackEnd.Controllers
                 //{
                 //    return Unauthorized();  
                 //}
-
+                orders = orders.Where(o =>
+                            (o.OrderDate >= Convert.ToDateTime(dateRange.Start))&&
+                            (o.OrderDate <= Convert.ToDateTime(dateRange.End))
+                            );
                 if (!String.IsNullOrEmpty(search))
                 {
                     orders = orders.Where(o =>o.OrderStatus.Contains(search)||o.TotalPrice.ToString().Contains(search)||o.User.FirstName.Contains(search)||o.User.LastName.Contains(search) );
                 }
+                orders = orders.Include(e => e.CartProducts)
+                            .ThenInclude(p => p.Product)
+                            .Include(e=>e.User);
+                await orders.LoadAsync();
                 switch (paging.Sort)
                 {
                     case "name_asc":
@@ -74,7 +82,11 @@ namespace BulkyBookBackEnd.Controllers
                         break;
                 }
                 var data = await PaginatedList<Order>.CreateAsync(orders.AsNoTracking(), paging);
-                return Ok(data);
+                return Ok(new
+                {
+                    orders=data,
+                    totalPages = data.TotalPages
+                });
             }
             catch (Exception e)
             {
@@ -84,13 +96,13 @@ namespace BulkyBookBackEnd.Controllers
 
         // GET: api/Orders/5
         [HttpGet("get/{id}")]
-        //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator,Customer")]
-        public async Task<ActionResult<Order>> GetOrder(int id)
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator,Customer")]
+        public async Task<ActionResult> GetOrder(int id)
         {
             var order = from o in _context.Orders
                         select o;
-            var user = Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
-            var role = user.Result.Role;
+            var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
+            var role = user.Role;
             if (role == "Customer")
             {
                 order = order.Where(o=>o.Id==id&&o.User.Id==user.Id);
@@ -102,27 +114,29 @@ namespace BulkyBookBackEnd.Controllers
             {
                 return Unauthorized();
             }
+            order = order
+                .Include(e => e.CartProducts)
+                .ThenInclude(p => p.Product);
+            await order.LoadAsync();
             var data = await order.FirstOrDefaultAsync();
+            
             if (data == null)
             {
                 return NotFound();
             }
 
-            return data;
+            return Ok(data);
         }
 
         // PUT: api/Orders/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPut("put/{id}")]
-        //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator,Customer")]
-        public async Task<IActionResult> PutOrder(int id, Order order)
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator,Customer")]
+        public async Task<IActionResult> PutOrder(int id, [FromQuery] string status="Ordered")
         {
-            if (id != order.Id)
-            {
-                return BadRequest();
-            }
-            var user = Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
-            var role = user.Result.Role;
+            var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
+            var order = await _context.Orders.FindAsync(id);
+            var role = user.Role;
             if (role == "Customer")
             {
                 if(order.User.Id != user.Id)
@@ -133,7 +147,7 @@ namespace BulkyBookBackEnd.Controllers
             {
                 return Unauthorized();
             }
-
+            order.OrderStatus=status;
             _context.Entry(order).State = EntityState.Modified;
 
             try
@@ -151,8 +165,7 @@ namespace BulkyBookBackEnd.Controllers
                     throw;
                 }
             }
-
-            return NoContent();
+            return Ok();
         }
 
         //// POST: api/Orders
@@ -206,6 +219,80 @@ namespace BulkyBookBackEnd.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        [HttpPost("place")]
+        //[ValidateAntiForgeryToken]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Customer")]
+        public async Task<IActionResult> PlaceOrder()
+        {
+            var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
+            var err = new HttpResponseMessage(HttpStatusCode.BadRequest);
+            var message = string.Format("User Not Found");
+            if (user == null)
+            {
+                err.Content = new StringContent(message);
+                return StatusCode(400, err);
+            }
+            var cart = await _context.Carts.Where(c => c.User == user && c.IsOpen).FirstOrDefaultAsync();
+            if (cart == null)
+            {
+                message = string.Format("Cannot Find Products, Please Try Again");
+                err.Content = new StringContent(message);
+                return StatusCode(400, err);
+            }
+            var cartProducts = await _context.CartProducts.Where(x => x.CartId == cart.Id).ToListAsync();
+            if (cartProducts == null || cartProducts.Count <= 0)
+            {
+                message = string.Format("No Products Found");
+                err.Content = new StringContent(message);
+                return StatusCode(400, err);
+            }
+            int totalSales = 0; ;
+            float totalPrice = 0;
+            foreach (var product in cartProducts)
+            {
+                await _context.Entry(product).Reference(x => x.Product).LoadAsync();
+                var book = product.Product;
+                var bookQuantity = product.Quantity;
+                var totalPriceOfBook = product.TotalPrice;
+                //var findBookEntity = await _context.Books.FindAsync(book.Id);
+                book.Units -= bookQuantity;
+                book.Sales += bookQuantity;
+                totalSales+=bookQuantity;
+                totalPrice += totalPriceOfBook;
+                _context.Entry(book).State = EntityState.Modified;
+            }
+            var order = new Order
+            {
+                User = user,
+                CartProducts = cartProducts,
+                TotalPrice = totalPrice,
+                TotalSales = totalSales
+            };
+            await _context.Orders.AddAsync(order);
+            var day = DateTime.Now.Day;
+            var month = DateTime.Now.Month;
+            var year = DateTime.Now.Year;
+            var salesLog = await _context.SalesLog
+                .Where(x => x.Day==day&&x.Month==month&&x.Year==year).FirstOrDefaultAsync();
+            if (salesLog == null)
+            {
+                salesLog = new SalesLog
+                {
+                    Day = day,
+                    Month = month,
+                    Year = year
+                };
+                await _context.SalesLog.AddAsync(salesLog);
+                await _context.SaveChangesAsync();
+            }
+            salesLog.Orders.Add(order);
+            _context.Entry(salesLog).State = EntityState.Modified;
+            cart.IsOpen = false;
+            _context.Entry(cart).State =EntityState.Modified;
+            await _context.SaveChangesAsync();
+            return Ok(order);
         }
 
         private bool OrderExists(int id)

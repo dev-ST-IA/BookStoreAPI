@@ -2,7 +2,7 @@
 {
     public class DateRange
     {
-        public DateOnly? Start { get; set; } = DateOnly.MinValue;
-        public DateOnly? End { get; set; } = DateOnly.MaxValue;
+        public DateTime? Start { get; set; } = DateTime.MinValue;
+        public DateTime? End { get; set; } = DateTime.MaxValue;
     }
 }

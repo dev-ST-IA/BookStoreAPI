@@ -11,13 +11,17 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers().AddJsonOptions(options=>options.JsonSerializerOptions.ReferenceHandler=ReferenceHandler.Preserve);
+builder.Services.AddControllers().AddJsonOptions(options=>options.JsonSerializerOptions.ReferenceHandler=ReferenceHandler.Preserve)
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.WriteAsString;
+    });
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddCors(p => p.AddPolicy("corsapp", corsBuilder =>
 {
-    corsBuilder.WithOrigins(builder.Configuration["CorsAllowedHosts:FrontEndDevelopmentHost"], builder.Configuration["CorsAllowedHosts:FrontEndProductionHost"]).AllowAnyMethod().AllowAnyHeader();
+    corsBuilder.WithOrigins(builder.Configuration["CorsAllowedHosts:FrontEndDevelopmentHost"], builder.Configuration["CorsAllowedHosts:FrontEndProductionHost"], builder.Configuration["CorsAllowedHosts:FrontEndDevelopmentAdminHost"]).AllowAnyMethod().AllowAnyHeader();
 }));
 
 builder.Services.AddSwaggerGen(options=>
@@ -51,7 +55,8 @@ builder.Services.AddSwaggerGen(options=>
 
 // Inject DbContext
 builder.Services.AddDbContext<BookDbContext>(options => 
-options.UseSqlServer(builder.Configuration.GetConnectionString("Development")));
+options
+.UseSqlServer(builder.Configuration.GetConnectionString("Development")));
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
     options.TokenValidationParameters = new TokenValidationParameters()
     {

@@ -12,7 +12,7 @@ using System.Security.Claims;
 
 namespace BulkyBookBackEnd.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/cart")]
     [ApiController]
     public class CartsController : ControllerBase
     {
@@ -32,52 +32,38 @@ namespace BulkyBookBackEnd.Controllers
 
         // GET: api/Carts/5
         [HttpGet("get")]
-        public async Task<ActionResult<Cart>> GetCart(int id)
+        [Produces("application / json")]
+        public async Task<ActionResult> GetCart()
         {
             var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
             var cart = await getCart(user);
 
-            if (cart == null)
-            {
-                return NotFound();
-            }else if(cart.User.Id != user.Id)
-            {
-                return BadRequest();
-            }
-
-            return cart;
+            return Ok(cart);
         }
 
         // PUT: api/Carts/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
-        [HttpPut("add/{product}")]
-        public async Task<IActionResult> AddProduct(int product,[FromQuery] int quantity)
+        [HttpPut("add/{product}/{quantity}")]
+        [Produces("application / json")]
+        public async Task<IActionResult> AddProduct(int product, int quantity)
         {
             var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
-            var cart = await getCart(user);
-            if (cart == null)
-            {
-                cart = new Cart
-                {
-                    User = user,
-                };
-                await _context.Carts.AddAsync(cart);
-            }
+            var cartProducts = await getCart(user);
+            var cart = await _context.Carts.Where(i => i.User == user && i.IsOpen).FirstOrDefaultAsync();
             var realBook = await getProduct(product,quantity);
             if(realBook == null)
             {
                 return BadRequest();
             }
-            var isProductIn = await _context.Carts.AnyAsync(c => c.Id==cart.Id&&c.Products.Any(item => item.Product == realBook));
+            var isProductIn = cartProducts.Any(item => item.Product == realBook);
             if (isProductIn)
             {
-                return await EditProduct(product, quantity);
+                var edit = await EditProduct(product, quantity);
+                return edit;
             }
             var newProduct = new CartProduct(realBook,quantity);
-            var newList = cart.Products;
-            newList.Add(newProduct);
-            cart.Products = newList;
-            _context.Entry(cart).State = EntityState.Modified;
+            newProduct.CartId = cart.Id;
+            await _context.CartProducts.AddAsync(newProduct);
 
             try
             {
@@ -85,7 +71,7 @@ namespace BulkyBookBackEnd.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (cart==null)
+                if (cartProducts==null)
                 {
                     return NotFound();
                 }
@@ -99,21 +85,21 @@ namespace BulkyBookBackEnd.Controllers
         }
 
         [HttpPut("delete/{product}")]
-        public async Task<IActionResult> DeleteProduct(int id, int product)
+        public async Task<IActionResult> DeleteProduct(int product)
         {
             var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
-            var cart = await getCart(user);
-            if (cart == null)
+            var cartProducts = await getCart(user);
+            if (cartProducts == null)
             {
                 return BadRequest();
             }
-            var realBook = cart.Products.FirstOrDefault(book=>book.Id==product);
+            var realBook = cartProducts.FirstOrDefault(book=>book.Product.Id==product);
             if (realBook == null)
             {
                 return BadRequest();
             }
-            cart.Products.Remove(realBook);
-            _context.Entry(cart).State = EntityState.Modified;
+            cartProducts.Remove(realBook);
+            _context.Entry(realBook).State = EntityState.Deleted;
 
             try
             {
@@ -121,7 +107,7 @@ namespace BulkyBookBackEnd.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!CartExists(id))
+                if (cartProducts.Count<=0)
                 {
                     return NotFound();
                 }
@@ -134,12 +120,13 @@ namespace BulkyBookBackEnd.Controllers
             return NoContent();
         }
 
-        [HttpPut("edit/{product}")]
-        public async Task<IActionResult> EditProduct( int product,[FromBody] int quantity)
+        [HttpPut("edit/{product}/{quantity}")]
+        [Produces("application / json")]
+        public async Task<IActionResult> EditProduct( int product,int quantity)
         {
             var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
-            var cart = await getCart(user);
-            if (cart==null)
+            var cartProducts = await getCart(user);
+            if (cartProducts==null)
             {
                 return BadRequest();
             }
@@ -148,13 +135,15 @@ namespace BulkyBookBackEnd.Controllers
             {
                 return BadRequest();
             }
-            var isProductIn = cart.Products.Any(c =>c.Product == realBook);
+            var isProductIn = cartProducts.Any(c =>c.Product == realBook);
             if (!isProductIn)
             {
                 return BadRequest();
             }
-            cart.Products.Where(p => p.Id == product).First().Quantity = quantity;
-            _context.Entry(cart).State = EntityState.Modified;
+            var editableItem = cartProducts.Where(c => c.Product == realBook).FirstOrDefault();
+            editableItem.Quantity = quantity;
+            editableItem.TotalPrice = editableItem.Quantity*editableItem.Product.Price;
+            _context.Entry(editableItem).State = EntityState.Modified;
 
             try
             {
@@ -162,7 +151,7 @@ namespace BulkyBookBackEnd.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (cart==null)
+                if (cartProducts==null)
                 {
                     return NotFound();
                 }
@@ -179,8 +168,9 @@ namespace BulkyBookBackEnd.Controllers
         public async Task<IActionResult> clearCart()
         {
             var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
-            var cart = await getCart(user);
-            if (cart == null)
+            var cartProducts = await getCart(user);
+            var cart = await _context.Carts.Where(i => i.User == user && i.IsOpen).FirstOrDefaultAsync();
+            if (cartProducts == null||cart==null)
             {
                 return BadRequest();
             }
@@ -193,7 +183,7 @@ namespace BulkyBookBackEnd.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (cart == null)
+                if (cartProducts == null||cart==null)
                 {
                     return NotFound();
                 }
@@ -219,16 +209,21 @@ namespace BulkyBookBackEnd.Controllers
 
         // DELETE: api/Carts/5
         [HttpDelete("delete")]
-        public async Task<IActionResult> DeleteCart(int id)
+        public async Task<IActionResult> DeleteCart()
         {
             var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
-            var cart = await getCart(user);
+            if (user == null)
+            {
+                return BadRequest();
+            }
+            var cart = await _context.Carts.Where(x => x.User == user && x.IsOpen).FirstOrDefaultAsync();
             if (cart == null)
             {
                 return NotFound();
             }
 
             _context.Carts.Remove(cart);
+            _context.Entry(cart).State = EntityState.Deleted;
             await _context.SaveChangesAsync();
 
             return NoContent();
@@ -239,10 +234,46 @@ namespace BulkyBookBackEnd.Controllers
             return _context.Carts.Any(e => e.Id == id);
         }
 
-        private async Task<Cart> getCart(User user)
+        private async Task<ICollection<CartProduct>> getCart(User user)
         {
-            var cart = await _context.Carts.Where(cart => cart.User == user&& cart.IsOpen).FirstOrDefaultAsync();
-            return cart;
+            var isUser =await  _context.Users.AnyAsync(u => u.Id == user.Id);
+            if (isUser == null)
+            {
+                return null;
+            }
+            var cart = await _context.Carts.Where(cart => cart.User == user && cart.IsOpen).FirstOrDefaultAsync();
+            if (cart == null)
+            {
+                var newCart = new Cart { 
+                    IsOpen=true,
+                    User = user
+                };
+                await _context.AddAsync(newCart);
+                await _context.SaveChangesAsync();
+                return newCart.Products;
+            }
+            var cartProducts = await _context.CartProducts.Where(c => c.CartId == cart.Id).ToListAsync();
+            if (cartProducts.Count > 0)
+            {
+                foreach(var product in cartProducts)
+                {
+                    await _context.Entry(product).Reference(x=>x.Product).LoadAsync();
+                }
+            }
+            return cartProducts;
+            //var oldCart = new Cart
+            //{
+            //    Id = cart.Id,
+            //    IsOpen = cart.IsOpen,
+            //    User = user,
+            //};
+            //if (cartProducts != null)
+            //{
+            //    oldCart.Products=cartProducts;
+            //    _context.Entry(oldCart).State = EntityState.Modified;
+            //    await _context.SaveChangesAsync();
+            //    return oldCart;
+            //}
         }
 
         private async Task<Book> getProduct(int id,int quantity)

@@ -11,6 +11,9 @@ namespace BulkyBookBackEnd.Req.Bodies
         public string? CategoryName { get; set; } = default!;
 
         [Required]
+        public string AuthorName { get; set; }= default!;
+
+        [Required]
         public string? Title { get; set; } = default!;
 
         [Required]
@@ -58,6 +61,17 @@ namespace BulkyBookBackEnd.Req.Bodies
                     await db.SaveChangesAsync();
 
                 }
+                var author = await db.Author.FirstOrDefaultAsync(b => b.Name == body.AuthorName);
+                if (author == default(Author))
+                {
+                    author =  new Author()
+                    {
+                        Name = body.AuthorName
+                    };
+                    await db.Author.AddAsync(author);
+                    await db.SaveChangesAsync();
+
+                }
                 var newBook = new Book()
                 {
                     Title = body.Title,
@@ -66,7 +80,8 @@ namespace BulkyBookBackEnd.Req.Bodies
                     Units = (int)body.Units,
                     Cost = (float)body.Cost,
                     Price = (float)body.Price,
-                    Category = category
+                    Category = category,
+                    Author=author
 
                 };
                 await db.AddAsync(newBook);

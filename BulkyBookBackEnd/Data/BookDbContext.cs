@@ -25,6 +25,12 @@ namespace BulkyBookBackEnd.Data
 
         public DbSet<CartProduct> CartProducts { get; set; } = default!;
 
+        public DbSet<Author> Author { get; set; } = default!;
+
+        public DbSet<SalesLog> SalesLog { get; set; } = default!;
+
+        public DbSet<BookRating> BookRatings { get; set; } = default!;
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -39,18 +45,29 @@ namespace BulkyBookBackEnd.Data
             modelBuilder.Entity<User>()
                 .HasIndex(e => new { e.UserName })
                 .IsUnique(true);
+            modelBuilder.Entity<SalesLog>()
+                .HasIndex(e => new {e.Day,e.Month,e.Year})
+                .IsUnique();
 
-            modelBuilder.Entity<User>().Property(b => b.Feedbacks)
-                .HasConversion(
-                    v => JsonConvert.SerializeObject(v),
-                    v => JsonConvert.DeserializeObject<IDictionary<Book, FeedBack>>(v));
+            //modelBuilder.Entity<User>().Property(b => b.Feedbacks)
+            //    .HasConversion(
+            //        v => JsonConvert.SerializeObject(v),
+            //        v => JsonConvert.DeserializeObject<IDictionary<Book, FeedBack>>(v));
 
             modelBuilder.Entity<Category>()
                 .HasIndex(e => new { e.Name })
                 .IsUnique(true);
 
+            modelBuilder.Entity<Author>()
+                .HasIndex(e => new { e.Name })
+                .IsUnique(true);
+
             modelBuilder.Entity<Book>()
                 .HasIndex(e=>new {e.Title,e.Publisher})
+                .IsUnique(true);
+
+            modelBuilder.Entity<BookRating>()
+                .HasIndex(e => new {e.UserId,e.BookId})
                 .IsUnique(true);
 
             //modelBuilder.Entity<Cart>()
@@ -88,7 +105,6 @@ namespace BulkyBookBackEnd.Data
             //    .HasIndex(e => new { e.User.Id })
             //    .IsUnique(true);
         }
-
 
     }
 }

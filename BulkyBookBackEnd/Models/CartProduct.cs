@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace BulkyBookBackEnd.Models
 {
@@ -16,7 +17,9 @@ namespace BulkyBookBackEnd.Models
         public int Quantity { get; set; }
 
         [Required]
-        public float TotalPrice { get; private set; }
+        public float TotalPrice { get;  set; }
+
+        public int CartId { get; set; }
 
         public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
         {

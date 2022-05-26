@@ -12,8 +12,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace BulkyBookBackEnd.Migrations
 {
     [DbContext(typeof(BookDbContext))]
-    [Migration("20220404070832_initial")]
-    partial class initial
+    [Migration("20220524052338_feedbacks user")]
+    partial class feedbacksuser
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
@@ -24,6 +24,26 @@ namespace BulkyBookBackEnd.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder, 1L, 1);
 
+            modelBuilder.Entity("BulkyBookBackEnd.Models.Author", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Author");
+                });
+
             modelBuilder.Entity("BulkyBookBackEnd.Models.Book", b =>
                 {
                     b.Property<int>("Id")
@@ -31,6 +51,9 @@ namespace BulkyBookBackEnd.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+
+                    b.Property<int>("AuthorId")
+                        .HasColumnType("int");
 
                     b.Property<int>("CategoryId")
                         .HasColumnType("int");
@@ -87,6 +110,8 @@ namespace BulkyBookBackEnd.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AuthorId");
+
                     b.HasIndex("CategoryId");
 
                     b.HasIndex("UserId");
@@ -126,7 +151,7 @@ namespace BulkyBookBackEnd.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
 
-                    b.Property<int?>("CartId")
+                    b.Property<int>("CartId")
                         .HasColumnType("int");
 
                     b.Property<int?>("OrderId")
@@ -209,6 +234,9 @@ namespace BulkyBookBackEnd.Migrations
                     b.Property<int>("BookId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -243,6 +271,9 @@ namespace BulkyBookBackEnd.Migrations
                     b.Property<DateTime>("OrderUpdateDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<int?>("SalesLogId")
+                        .HasColumnType("int");
+
                     b.Property<float>("TotalPrice")
                         .HasColumnType("real");
 
@@ -254,9 +285,36 @@ namespace BulkyBookBackEnd.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("SalesLogId");
+
                     b.HasIndex("UserId");
 
                     b.ToTable("Orders");
+                });
+
+            modelBuilder.Entity("BulkyBookBackEnd.Models.SalesLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"), 1L, 1);
+
+                    b.Property<int>("Day")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Day", "Month", "Year")
+                        .IsUnique();
+
+                    b.ToTable("SalesLog");
                 });
 
             modelBuilder.Entity("BulkyBookBackEnd.Models.User", b =>
@@ -273,9 +331,6 @@ namespace BulkyBookBackEnd.Migrations
                     b.Property<string>("EmailAddress")
                         .IsRequired()
                         .HasColumnType("nvarchar(450)");
-
-                    b.Property<string>("Feedbacks")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
@@ -315,6 +370,12 @@ namespace BulkyBookBackEnd.Migrations
 
             modelBuilder.Entity("BulkyBookBackEnd.Models.Book", b =>
                 {
+                    b.HasOne("BulkyBookBackEnd.Models.Author", "Author")
+                        .WithMany("Books")
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("BulkyBookBackEnd.Models.Category", "Category")
                         .WithMany("Books")
                         .HasForeignKey("CategoryId")
@@ -324,6 +385,8 @@ namespace BulkyBookBackEnd.Migrations
                     b.HasOne("BulkyBookBackEnd.Models.User", null)
                         .WithMany("WatchList")
                         .HasForeignKey("UserId");
+
+                    b.Navigation("Author");
 
                     b.Navigation("Category");
                 });
@@ -343,7 +406,9 @@ namespace BulkyBookBackEnd.Migrations
                 {
                     b.HasOne("BulkyBookBackEnd.Models.Cart", null)
                         .WithMany("Products")
-                        .HasForeignKey("CartId");
+                        .HasForeignKey("CartId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("BulkyBookBackEnd.Models.Order", null)
                         .WithMany("CartProducts")
@@ -379,7 +444,7 @@ namespace BulkyBookBackEnd.Migrations
                         .IsRequired();
 
                     b.HasOne("BulkyBookBackEnd.Models.User", "User")
-                        .WithMany()
+                        .WithMany("Feedbacks")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -391,6 +456,10 @@ namespace BulkyBookBackEnd.Migrations
 
             modelBuilder.Entity("BulkyBookBackEnd.Models.Order", b =>
                 {
+                    b.HasOne("BulkyBookBackEnd.Models.SalesLog", null)
+                        .WithMany("Orders")
+                        .HasForeignKey("SalesLogId");
+
                     b.HasOne("BulkyBookBackEnd.Models.User", "User")
                         .WithMany("Orders")
                         .HasForeignKey("UserId")
@@ -398,6 +467,11 @@ namespace BulkyBookBackEnd.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("BulkyBookBackEnd.Models.Author", b =>
+                {
+                    b.Navigation("Books");
                 });
 
             modelBuilder.Entity("BulkyBookBackEnd.Models.Book", b =>
@@ -420,8 +494,15 @@ namespace BulkyBookBackEnd.Migrations
                     b.Navigation("CartProducts");
                 });
 
+            modelBuilder.Entity("BulkyBookBackEnd.Models.SalesLog", b =>
+                {
+                    b.Navigation("Orders");
+                });
+
             modelBuilder.Entity("BulkyBookBackEnd.Models.User", b =>
                 {
+                    b.Navigation("Feedbacks");
+
                     b.Navigation("Orders");
 
                     b.Navigation("WatchList");
