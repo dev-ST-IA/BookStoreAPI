@@ -26,5 +26,13 @@ namespace BulkyBookBackEnd.Models
             var items = await source.Skip((page - 1) * paging.Size).Take(paging.Size).ToListAsync();
             return new PaginatedList<T>(items, count, paging);
         }
+
+        public static async Task<PaginatedList<T>> CreateNonAsync(IQueryable<T> source, Paging paging)
+        {
+            var page = paging != null ? paging.Page : 1;
+            var count = source.Count();
+            var items = source.Skip((page - 1) * paging.Size).Take(paging.Size).ToList();
+            return new PaginatedList<T>(items, count, paging);
+        }
     }
 }

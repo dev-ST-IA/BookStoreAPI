@@ -99,26 +99,31 @@ namespace BulkyBookBackEnd.Controllers
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator,Customer")]
         public async Task<ActionResult> GetOrder(int id)
         {
-            var order = from o in _context.Orders
-                        select o;
+            Order order;
             var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
             var role = user.Role;
             if (role == "Customer")
             {
-                order = order.Where(o=>o.Id==id&&o.User.Id==user.Id);
+                order = _context.Orders.Single(o=>o.Id==id&&o.User.Id==user.Id);
             }else if(role == "Administrator")
             {
-                order = order.Where(o => o.Id == id);
+                order = _context.Orders.Single(o => o.Id == id);
             }
             else
             {
                 return Unauthorized();
             }
-            order = order
-                .Include(e => e.CartProducts)
-                .ThenInclude(p => p.Product);
-            await order.LoadAsync();
-            var data = await order.FirstOrDefaultAsync();
+            await _context.Entry(order)
+                .Collection(w => w.CartProducts)
+                .Query()
+                .Include(e=>e.Product)
+                .LoadAsync();
+            
+            //order = order
+            //    .Include(e => e.CartProducts)
+            //    .ThenInclude(p => p.Product);
+            //await order.LoadAsync();
+            var data = order;
             
             if (data == null)
             {

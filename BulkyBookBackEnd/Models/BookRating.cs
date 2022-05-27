@@ -18,7 +18,7 @@ namespace BulkyBookBackEnd.Models
 
         [ForeignKey("UserId")]
         [Required]
-        public User? User { get; set; }
+        public User? User { get; set; } 
 
         [Range(minimum: 0, maximum: 10)]
         public double Rating { get; set; } = 0;

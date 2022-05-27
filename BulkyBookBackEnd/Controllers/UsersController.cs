@@ -387,18 +387,24 @@ namespace BulkyBookBackEnd.Controllers
 
         // DELETE: api/Orders/5
         [HttpDelete("delete/{id}")]
-        //[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Administrator")]
         public async Task<IActionResult> DeleteOrder(int id)
         {
+            var operatingUser = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, db);
             var user = await db.Users.FindAsync(id);
             if (user == null)
             {
                 return NotFound();
             }
-            db.Users.Remove(user);
-            await db.SaveChangesAsync();
+            if(operatingUser.Id!= user.Id)
+            {
+                db.Users.Remove(user);
+                await db.SaveChangesAsync();
 
-            return NoContent();
+                return NoContent();
+
+            }
+            return BadRequest();
         }
 
         [HttpPut("star/{bookId}")]
@@ -479,37 +485,52 @@ namespace BulkyBookBackEnd.Controllers
             try
             {
                 var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, db);
-                var books = db.Users.Where(e => e.Id == user.Id)
-                            .Include(e => e.WatchList).ThenInclude(e=>e.Category)
-                            .Include(r=>r.WatchList).ThenInclude(y=>y.Author)
-                            .Select(e => e.WatchList.AsEnumerable().AsQueryable()).FirstOrDefault();
-                await books.LoadAsync();
 
+                var loadUser = db.Users.Single(e => e.Id == user.Id);
+
+                await db.Entry(loadUser)
+                        .Collection(e=>e.WatchList)
+                        .LoadAsync();
+
+                await db.Entry(loadUser)
+                        .Collection(e => e.WatchList)
+                        .Query()
+                        .Include(w => w.Author)
+                        .Include(q => q.Category)
+                        .LoadAsync();
+
+                var watchList = loadUser.WatchList.AsQueryable();
+               
+
+                //.ThenInclude(e => { e.Category,e.Author});
+                //await books.LoadAsync();
+                var starred = watchList;
                 switch (paging.Sort)
                 {
                     case "name_asc":
-                        books = books.OrderBy(b => b.Title);
+                        starred = starred.OrderBy(b => b.Title);
                         break;
                     case "name_desc":
-                        books = books.OrderByDescending(b => b.Title);
+                        starred = starred.OrderByDescending(b => b.Title);
                         break;
                     case "date_asc":
-                        books = books.OrderBy(b => b.CreatedDate);
+                        starred = starred.OrderBy(b => b.CreatedDate);
                         break;
                     case "date_desc":
-                        books = books.OrderByDescending(b => b.CreatedDate);
+                        starred = starred.OrderByDescending(b => b.CreatedDate);
                         break;
                     case "price_asc":
-                        books = books.OrderBy(b => b.Price);
+                        starred = starred.OrderBy(b => b.Price);
                         break;
                     case "price_desc":
-                        books = books.OrderByDescending((b) => b.Price);
+                        starred = starred.OrderByDescending((b) => b.Price);
                         break;
                     default:
-                        books = books.OrderByDescending(b => b.Sales);
+                        starred = starred.OrderByDescending(b => b.Sales);
                         break;
                 }
-                    var filtered = books.Select(b => new GetBooksCustomer
+                
+                var filtered = starred.Select(b => new GetBooksCustomer
                     {
                         Id = b.Id,
                         Title = b.Title,
@@ -525,7 +546,7 @@ namespace BulkyBookBackEnd.Controllers
                         AuthorId = (int)b.Author.Id,
                         AuthorName = b.Author.Name
                     });
-                    var data = await PaginatedList<GetBooksCustomer>.CreateAsync(filtered.AsNoTracking(), paging);
+                    var data = await PaginatedList<GetBooksCustomer>.CreateNonAsync(filtered, paging);
                     return Ok(new
                     {
                         Books = data,

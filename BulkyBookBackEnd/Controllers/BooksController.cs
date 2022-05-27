@@ -326,6 +326,7 @@ namespace BulkyBookBackEnd.Controllers
 
         [HttpGet("rate/{id}")]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Customer")]
+        [AllowAnonymous]
         public async Task<IActionResult> GetRating(int id)
         {
             var user = await Jwt.findUserByToken(HttpContext.User.Identity as ClaimsIdentity, _context);
@@ -342,11 +343,15 @@ namespace BulkyBookBackEnd.Controllers
                     bookRating = new BookRating()
                     {
                         Rating = 0,
-                        User = user,
                         Book = book,
-                        UserId = user.Id,
                         BookId = book.Id
                     };
+                    if(user!= null)
+                    {
+                        bookRating.User = user;
+                        bookRating.UserId = user.Id;
+                    }
+
                 }
                 return Ok(new
                 {
